@@ -20,7 +20,7 @@ class MSELoss(nn.MSELoss):
                                       reduction=reduction)
 
     def forward(self, input: Tensor, target: Tensor) -> Tensor:
-        return F.mse_loss(input, target, reduction=self.reduction) / 2.0
+        return F.mse_loss(input, target, reduction=self.reduction) / 2.0 / input.shape[0]
 
 class MSELoss_Vibrant(nn.MSELoss):
     """Custom MSELoss with 1/2 factor"""
