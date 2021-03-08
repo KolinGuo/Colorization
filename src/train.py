@@ -62,13 +62,13 @@ def get_parser() -> argparse.ArgumentParser:
     #train_parser.add_argument(
     #    "--ckpt-weights-only", action='store_true',
     #    help="Checkpoints will only save the model weights (Default: False)")
-    #train_parser.add_argument(
-    #    "--ckpt-dir", type=str, default='/Colorization/checkpoints',
-    #    help="Directory for saving/loading checkpoints")
-    #train_parser.add_argument(
-    #    "--ckpt-filepath", type=str, default=None,
-    #    help="Checkpoint filepath to load and resume training from "
-    #    "e.g. ./cp-001-50.51.ckpt.index")
+    train_parser.add_argument(
+        "--ckpt-dir", type=str, default='/Colorization/checkpoints',
+        help="Directory for saving/loading checkpoints")
+    train_parser.add_argument(
+        "--ckpt-filepath", type=str, default=None,
+        help="Checkpoint filepath to load and resume training from "
+        "e.g. ./cp-001-50.51.ckpt.pth")
     train_parser.add_argument(
         "--log-dir", type=str, default='/Colorization/tb_logs',
         help="Directory for saving tensorboard logs")
@@ -130,117 +130,44 @@ def train(args) -> None:
     # Evaluation metric
     auc_metric = AUC(step_size = 1.0, device=pytorch_device)
 
-
-
-    #class_names = ['Background', 'Gray Matter', 'White Matter']
-    #model.compile(optimizer=optimizers.Adam(),
-    #              loss=get_loss_func(args.loss_func, class_weight,
-    #                                 gamma=args.focal_loss_gamma),
-    #              metrics=[metrics.SparseCategoricalAccuracy(),
-    #                       SparseMeanIoU(num_classes=3, name='IoU/Mean'),
-    #                       SparsePixelAccuracy(num_classes=3, name='PixelAcc'),
-    #                       SparseMeanAccuracy(num_classes=3, name='MeanAcc'),
-    #                       SparseFreqIoU(num_classes=3, name='IoU/Freq_weighted'),
-    #                       SparseConfusionMatrix(num_classes=3, name='cm')] \
-    #        + SparseIoU.get_iou_metrics(num_classes=3, class_names=class_names))
-
     # Create another checkpoint/log folder for model.name and timestamp
-    #args.ckpt_dir = os.path.join(args.ckpt_dir,
-    #                             model.name+'-'+args.file_suffix)
+    args.ckpt_dir = os.path.join(args.ckpt_dir,
+                                 model.name+'-'+args.file_suffix)
     args.log_dir = os.path.join(args.log_dir, 'fit',
                                 model.name+'-'+args.file_suffix)
 
-    ## Check if resume from training
-    #initial_epoch = 0
-    #if args.ckpt_filepath is not None:
-    #    if args.ckpt_weights_only:
-    #        if args.ckpt_filepath.endswith('.index'):   # Get rid of the suffix
-    #            args.ckpt_filepath = args.ckpt_filepath.replace('.index', '')
-    #        model.load_weights(args.ckpt_filepath).assert_existing_objects_matched()
-    #        print('Model weights loaded')
-    #    else:
-    #        model = load_whole_model(args.ckpt_filepath)
-    #        print('Whole model (weights + optimizer state) loaded')
+    # Check if resume from training
+    start_epoch = 0
+    if args.ckpt_filepath is not None:
+        ckpt = torch.load(args.ckpt_filepath)
+        model.load_state_dict(ckpt['model_state_dict'])
+        optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        start_epoch = ckpt['epoch']
+        print(f'Model weights loaded, starting epoch = {start_epoch}/{args.num_epochs}')
 
-    #    initial_epoch = int(args.ckpt_filepath.split('/')[-1]\
-    #            .split('-')[1])
-    #    # Save in same checkpoint_dir but different log_dir (add current time)
-    #    args.ckpt_dir = os.path.abspath(
-    #        os.path.dirname(args.ckpt_filepath))
-    #    args.log_dir = args.ckpt_dir.replace(
-    #        'checkpoints', 'tb_logs/fit') + f'-retrain_{args.file_suffix}'
+        # Save in same checkpoint_dir but different log_dir (add current time)
+        args.ckpt_dir = os.path.abspath(
+            os.path.dirname(args.ckpt_filepath))
+        args.log_dir = args.ckpt_dir.replace(
+            'checkpoints', 'tb_logs/fit') + f'-retrain_{args.file_suffix}'
 
     # Write configurations to log_dir
     log_configs(args.log_dir, args)
 
     # Create checkpoint directory
-    #if not os.path.exists(args.ckpt_dir):
-    #    os.makedirs(args.ckpt_dir)
+    if not os.path.exists(args.ckpt_dir):
+        os.makedirs(args.ckpt_dir)
     ## Create log directory
-    #if not os.path.exists(args.log_dir):
-    #    os.makedirs(args.log_dir)
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
 
-    ## Create a callback that saves the model's weights every 1 epoch
-    #if val_dataset:
-    #    ckpt_path = os.path.join(
-    #        args.ckpt_dir, 'cp-{epoch:03d}-{val_IoU/Mean:.4f}.ckpt')
-    #else:
-    #    ckpt_path = os.path.join(
-    #        args.ckpt_dir, 'cp-{epoch:03d}-{IoU/Mean:.4f}.ckpt')
-    #cp_callback = callbacks.ModelCheckpoint(
-    #    filepath=ckpt_path,
-    #    verbose=1,
-    #    save_weights_only=args.ckpt_weights_only,
-    #    save_freq='epoch')
-
-    ## Create a TensorBoard callback
-    #tb_callback = callbacks.TensorBoard(
-    #    log_dir=args.log_dir,
-    #    histogram_freq=1,
-    #    write_graph=True,
-    #    write_images=False,
-    #    update_freq='batch',
-    #    profile_batch='100, 120')
-
-    ## Create a Lambda callback for plotting confusion matrix
-    #cm_callback = get_cm_callback(args.log_dir, class_names)
-
-    ## Create a TerminateOnNaN callback
-    #nan_callback = callbacks.TerminateOnNaN()
-
-    ## Create an EarlyStopping callback
-    #if val_dataset:
-    #    es_callback = callbacks.EarlyStopping(monitor='val_IoU/Mean',
-    #                                          min_delta=0.01,
-    #                                          patience=3,
-    #                                          verbose=1,
-    #                                          mode='max')
-
-    #if val_dataset:
-    #    model.fit(
-    #        train_dataset,
-    #        epochs=args.num_epochs,
-    #        steps_per_epoch=len(train_dataset) \
-    #                if args.steps_per_epoch == -1 else args.steps_per_epoch,
-    #        initial_epoch=initial_epoch,
-    #        validation_data=val_dataset,
-    #        validation_steps=len(val_dataset) // args.val_subsplits \
-    #                if args.val_steps == -1 else args.val_steps,
-    #        callbacks=[cp_callback, tb_callback, nan_callback, cm_callback, es_callback])
-    #else:
-    #    model.fit(
-    #        train_dataset,
-    #        epochs=args.num_epochs,
-    #        steps_per_epoch=len(train_dataset) \
-    #                if args.steps_per_epoch == -1 else args.steps_per_epoch,
-    #        initial_epoch=initial_epoch,
-    #        callbacks=[cp_callback, tb_callback, nan_callback, cm_callback])
-    # TODO: Switch to tf.data
-
+    # Create Tensorboard SummaryWriter
     train_writer = SummaryWriter(args.log_dir + "/train")
     val_writer = SummaryWriter(args.log_dir + "/validation")
+
+    # Begin training
     batch_global_step = 0
-    for epoch_i in range(args.num_epochs):
+    for epoch_i in range(start_epoch, args.num_epochs):
         # Train on training dataset
         epoch_loss = 0.0
         model = model.train()  # Set the module in training mode
@@ -300,9 +227,18 @@ def train(args) -> None:
         print(f'Epoch {epoch_i+1}/{args.num_epochs}: train_loss={train_epoch_loss}'
               f'\tval_loss={val_epoch_loss}\tval_auc={val_epoch_auc}')
 
-        # TODO: Save Checkpoint
-
-        # TODO: Print
+        # Save Checkpoint
+        ckpt_path = os.path.join(args.ckpt_dir, 
+                                 'cp-{epoch:03d}-{val_epoch_auc:.4f}.ckpt.pth')
+        torch.save({
+            'epoch': epoch_i+1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_epoch_loss': train_epoch_loss,
+            'val_epoch_loss': val_epoch_loss,
+            'val_epoch_auc': val_epoch_auc,
+            }, ckpt_path)
+        print(f'Checkpoint saved to {ckpt_path}')
 
     # Close the SummaryWriter
     train_writer.close()
