@@ -16,6 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 from networks.dataset import load_dataset
 from networks.models import get_model
 from networks.losses import get_loss_func
+from networks.metrics import AUC
 
 def get_parser() -> argparse.ArgumentParser:
     """Get the argparse parser for this script"""
@@ -36,6 +37,12 @@ def get_parser() -> argparse.ArgumentParser:
     dataset_parser.add_argument(
         "--data-annFile", type=str, default='/Colorization/data/annotations/instances_train2017.json',
         help="Directory of COCO train2017 annotation file (Default: data/annotations/instances_train2017.json)")
+    dataset_parser.add_argument(
+        "--val-data-dir", type=str, default='/Colorization/data/val2017',
+        help="Directory of COCO val2017 dataset (Default: data/val2017)")
+    dataset_parser.add_argument(
+        "--val-data-annFile", type=str, default='/Colorization/data/annotations/instances_val2017.json',
+        help="Directory of COCO val2017 annotation file (Default: data/annotations/instances_val2017.json)")
 
     train_parser = main_parser.add_argument_group('Training configurations')
     train_parser.add_argument(
@@ -50,16 +57,14 @@ def get_parser() -> argparse.ArgumentParser:
         "--num-epochs", type=int, default=20,
         help="Number of training epochs (Default: 20)")
     train_parser.add_argument(
-        "--device", type=str, default='cuda:0',
-        help="Number of training epochs (Default: 20)")
+        "--device", choices=['cuda:0', 'cpu'], default='cuda:0',
+        help="Training device (Default: cuda:0)")
     #train_parser.add_argument(
     #    "--ckpt-weights-only", action='store_true',
     #    help="Checkpoints will only save the model weights (Default: False)")
     #train_parser.add_argument(
-    #    "--ckpt-dir", 
-    #    choices=['cuda:0', 'cpu'],
-    #    default='cuda:0',
-    #    help="Training device (Default: cuda:0)")
+    #    "--ckpt-dir", type=str, default='/Colorization/checkpoints',
+    #    help="Directory for saving/loading checkpoints")
     #train_parser.add_argument(
     #    "--ckpt-filepath", type=str, default=None,
     #    help="Checkpoint filepath to load and resume training from "
@@ -104,10 +109,11 @@ def train(args) -> None:
     # Set tf.keras mixed precision to float16
     #set_keras_mixed_precision_policy('mixed_float16')
 
-    # Load dataset
-    train_dataset \
-            = load_dataset(args.data_dir, args.data_annFile,
-                           args.batch_size)
+    # Load datasets
+    train_dataset = load_dataset(args.data_dir, args.data_annFile,
+                                 args.batch_size)
+    val_dataset = load_dataset(args.val_data_dir, args.val_data_annFile,
+                               args.batch_size)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)
@@ -121,9 +127,8 @@ def train(args) -> None:
                                  lr=3*1e-5,
                                  betas=(0.9,0.99),
                                  weight_decay=1e-3)
-
-
-
+    # Evaluation metric
+    auc_metric = AUC(step_size = 1.0, device=pytorch_device)
 
 
 
@@ -233,10 +238,12 @@ def train(args) -> None:
     # TODO: Switch to tf.data
 
     train_writer = SummaryWriter(args.log_dir + "/train")
-    #val_writer = SummaryWriter(args.log_dir + "/validation")
+    val_writer = SummaryWriter(args.log_dir + "/validation")
     batch_global_step = 0
     for epoch_i in range(args.num_epochs):
+        # Train on training dataset
         epoch_loss = 0.0
+        model = model.train()  # Set the module in training mode
         for batch_i, (img_l, img_ab) in enumerate(train_dataset):
             # Passing data to GPU
             img_l  = img_l.to(pytorch_device)
@@ -251,19 +258,55 @@ def train(args) -> None:
             epoch_loss += loss
             # Write batch loss
             train_writer.add_scalar('batch_loss', loss,
-                                    global_step=batch_global_step)  # FIXME: what is walltime?
+                                    global_step=batch_global_step)
 
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
         # Write epoch averaged loss
-        train_writer.add_scalar('epoch_loss', epoch_loss / (batch_i+1),
-                                global_step=epoch_i+1)  # FIXME: what is walltime?
+        train_epoch_loss = epoch_loss / (batch_i+1)
+        train_writer.add_scalar('epoch_loss', train_epoch_loss,
+                                global_step=epoch_i+1)
+
+        # Evaluate on validation set
+        epoch_val_loss = 0.0
+        model = model.eval()  # Set the module in evaluation mode
+        auc_metric.reset()    # Reset eval metric
+        with torch.no_grad():
+            for batch_i, (img_l, img_ab) in enumerate(val_dataset):
+                # Passing data to GPU
+                img_l  = img_l.to(pytorch_device)
+                img_ab = img_ab.to(pytorch_device)
+
+                # Forward pass through model
+                img_ab_pred = model(img_l)
+
+                # Compute loss
+                loss = loss_func(img_ab_pred, img_ab)
+                epoch_val_loss += loss
+                # Update eval metric
+                auc_metric.update((img_ab_pred, img_ab))
+
+        # Write epoch averaged loss for validation set
+        val_epoch_loss = epoch_val_loss / (batch_i+1)
+        val_writer.add_scalar('epoch_loss', val_epoch_loss,
+                              global_step=epoch_i+1)
+        val_epoch_auc = auc_metric.compute()
+        val_writer.add_scalar('epoch_auc', val_epoch_auc,
+                              global_step=epoch_i+1)
+
+        # Print loss/eval metric
+        print(f'Epoch {epoch_i+1}/{args.num_epochs}: train_loss={train_epoch_loss}'
+              f'\tval_loss={val_epoch_loss}\tval_auc={val_epoch_auc}')
+
+        # TODO: Save Checkpoint
+
+        # TODO: Print
 
     # Close the SummaryWriter
     train_writer.close()
-    #val_writer.close()
+    val_writer.close()
 
     print('Training finished!')
 

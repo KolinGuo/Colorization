@@ -20,9 +20,9 @@ def input_transforms(img_rgb_orig, target, HW=(256,256), resample=3):
     return (tens_rs_l, tens_rs_ab)
 
 def load_dataset(root: str, annFile: str, batch_size: int):
-    trainset = dset.CocoDetection(root=root,
-                                  annFile=annFile,
-                                  transforms=input_transforms)
-    trainloader = data.DataLoader(trainset, batch_size=batch_size)
-    return trainloader
+    dataset = dset.CocoDetection(root=root,
+                                 annFile=annFile,
+                                 transforms=input_transforms)
+    dataloader = data.DataLoader(dataset, batch_size=batch_size)
+    return dataloader
 
