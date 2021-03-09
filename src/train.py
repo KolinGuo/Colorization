@@ -77,13 +77,13 @@ def get_parser() -> argparse.ArgumentParser:
         default=datetime.now().strftime("%Y%m%d_%H%M%S"),
         help="Suffix for ckpt file and log file (Default: current timestamp)")
 
-    #testing_parser = main_parser.add_argument_group('Testing configurations')
-    #testing_parser.add_argument(
-    #    "--steps-per-epoch", type=int, default=-1,
-    #    help="Training steps per epoch (Testing only, don't modify)")
-    #testing_parser.add_argument(
-    #    "--val-steps", type=int, default=-1,
-    #    help="Validation steps (Testing only, don't modify)")
+    testing_parser = main_parser.add_argument_group('Testing configurations')
+    testing_parser.add_argument(
+        "--batch-per-epoch", type=int, default=-1,
+        help="Training batches per epoch (Testing only, don't modify)")
+    testing_parser.add_argument(
+        "--val-batch", type=int, default=-1,
+        help="Validation batches (Testing only, don't modify)")
 
     return main_parser
 
@@ -191,6 +191,11 @@ def train(args) -> None:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            # Preliminary stop for debugging
+            if args.batch_per_epoch > 0 and batch_i+1 == args.batch_per_epoch:
+                break
+
         # Write epoch averaged loss
         train_epoch_loss = epoch_loss / (batch_i+1)
         train_writer.add_scalar('epoch_loss', train_epoch_loss,
@@ -214,6 +219,10 @@ def train(args) -> None:
                 epoch_val_loss += loss
                 # Update eval metric
                 auc_metric.update((img_ab_pred, img_ab))
+
+                # Preliminary stop for debugging
+                if args.val_batch > 0 and batch_i+1 == args.val_batch:
+                    break
 
         # Write epoch averaged loss for validation set
         val_epoch_loss = epoch_val_loss / (batch_i+1)
