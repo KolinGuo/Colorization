@@ -128,7 +128,8 @@ def train(args) -> None:
                                  betas=(0.9,0.99),
                                  weight_decay=1e-3)
     # Evaluation metric
-    auc_metric = AUC(step_size = 1.0, device=pytorch_device)
+    #auc_metric = AUC(step_size = 1.0, device=pytorch_device)  # CUDA: Out-of-memory
+    auc_metric = AUC(step_size = 1.0)
 
     # Create another checkpoint/log folder for model.name and timestamp
     args.ckpt_dir = os.path.join(args.ckpt_dir,
@@ -234,11 +235,11 @@ def train(args) -> None:
 
         # Print loss/eval metric
         print(f'Epoch {epoch_i+1}/{args.num_epochs}: train_loss={train_epoch_loss}'
-              f'\tval_loss={val_epoch_loss}\tval_auc={val_epoch_auc}')
+              f'\tval_loss={val_epoch_loss}\tval_auc={val_epoch_auc:.4f}')
 
         # Save Checkpoint
         ckpt_path = os.path.join(args.ckpt_dir, 
-                                 'cp-{epoch:03d}-{val_epoch_auc:.4f}.ckpt.pth')
+                                 f'cp-{epoch_i+1:03d}-{val_epoch_auc:.4f}.ckpt.pth')
         torch.save({
             'epoch': epoch_i+1,
             'model_state_dict': model.state_dict(),
