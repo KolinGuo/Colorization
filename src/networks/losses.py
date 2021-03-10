@@ -10,6 +10,9 @@ def get_loss_func(loss_func: str, class_weight,
     """Returns an instance of the requested loss function"""
     if loss_func == 'MSELoss':
         return MSELoss(reduction='sum')
+    if loss_func == 'MSELoss_CH':
+        return MSELoss_CH(reduction='sum',
+                          color_vivid_gamma=color_vivid_gamma)
     if loss_func == 'MSELoss_Vibrant':
         return MSELoss_Vibrant(reduction='sum',
                                color_vivid_gamma=color_vivid_gamma)
@@ -20,12 +23,28 @@ class MSELoss(nn.MSELoss):
     __constants__ = ['reduction']
 
     def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
-        super(MSELoss, self).__init__(size_average=size_average, 
-                                      reduce=reduce, 
+        super(MSELoss, self).__init__(size_average=size_average,
+                                      reduce=reduce,
                                       reduction=reduction)
 
     def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
         return F.mse_loss(y_pred, y_true, reduction=self.reduction) / 2.0 / y_pred.shape[0]  # batch_size
+
+class MSELoss_CH(nn.MSELoss):
+    """Custom MSELoss for Chroma-Hue prediction with 1/2 factor"""
+    __constants__ = ['reduction']
+
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean',
+                 color_vivid_gamma: float = 2.0) -> None:
+        super(MSELoss, self).__init__(size_average=size_average,
+                                      reduce=reduce,
+                                      reduction=reduction)
+        self.color_vivid_gamma = color_vivid_gamma
+
+    def forward(self, y_pred: Tensor, y_true: Tensor) -> Tensor:
+        chroma_loss = F.mse_loss(y_pred[:,0,:,:], y_true[:,0,:,:], reduction=self.reduction)
+        hue_loss = F.mse_loss(y_pred[:,1,:,:], y_true[:,1,:,:], reduction=self.reduction)
+        return (self.color_vivid_gamma * chroma_loss + hue_loss) / 2.0 / y_pred.shape[0]  # batch_size
 
 class MSELoss_Vibrant(nn.MSELoss):
     """Custom MSELoss_Vibrant with 1/2 factor"""
