@@ -47,9 +47,12 @@ def get_parser() -> argparse.ArgumentParser:
     train_parser = main_parser.add_argument_group('Training configurations')
     train_parser.add_argument(
         '--loss-func',
-        choices=['MSELoss'],
-        default='MSELoss',
+        choices=['MSELoss', 'MSELoss_Vibrant'],
+        default='MSELoss_Vibrant',
         help="Loss functions for training")
+    train_parser.add_argument(
+        "--color-vivid-gamma", type=float, default=2.0,
+        help="Color vividness loss weight gamma (Default: 2.0)")
     train_parser.add_argument(
         "--batch-size", type=int, default=64,
         help="Batch size of patches (Default: 64)")
@@ -121,7 +124,8 @@ def train(args) -> None:
     #print(keras.backend.floatx())
 
     # Get loss function
-    loss_func = get_loss_func(args.loss_func, None)  # TODO: classweights
+    loss_func = get_loss_func(args.loss_func, None,
+                              color_vivid_gamma=args.color_vivid_gamma)  # TODO: classweights
     # Adam Optimizer
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=3*1e-5,
