@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from networks.dataset import load_dataset
+from networks.dataset import load_dataset, get_dataset_prior_probs
 from networks.models import get_model
 from networks.losses import get_loss_func
 from networks.metrics import AUC
@@ -36,13 +36,16 @@ def get_parser() -> argparse.ArgumentParser:
         help="Directory of COCO train2017 dataset (Default: data/train2017)")
     dataset_parser.add_argument(
         "--data-annFile", type=str, default='/Colorization/data/annotations/instances_train2017.json',
-        help="Directory of COCO train2017 annotation file (Default: data/annotations/instances_train2017.json)")
+        help="COCO train2017 annotation file (Default: data/annotations/instances_train2017.json)")
+    dataset_parser.add_argument(
+        "--ab-gamut-file", type=str, default='/Colorization/data/pts_in_hull.npy',
+        help="sRGB in-gamut file of ab space (Default: data/pts_in_hull.npy)")
     dataset_parser.add_argument(
         "--val-data-dir", type=str, default='/Colorization/data/val2017',
         help="Directory of COCO val2017 dataset (Default: data/val2017)")
     dataset_parser.add_argument(
         "--val-data-annFile", type=str, default='/Colorization/data/annotations/instances_val2017.json',
-        help="Directory of COCO val2017 annotation file (Default: data/annotations/instances_val2017.json)")
+        help="COCO val2017 annotation file (Default: data/annotations/instances_val2017.json)")
 
     train_parser = main_parser.add_argument_group('Training configurations')
     train_parser.add_argument(
@@ -111,6 +114,13 @@ def train(args) -> None:
 
     # Set tf.keras mixed precision to float16
     #set_keras_mixed_precision_policy('mixed_float16')
+
+    # Compute prior probability
+    prior_probs = get_dataset_prior_probs(args.data_dir, args.data_annFile,
+                                          args.batch_size // 4,
+                                          args.ab_gamut_file, pytorch_device)
+    # Empty GPU cache if possible
+    torch.cuda.empty_cache()
 
     # Load datasets
     train_dataset = load_dataset(args.data_dir, args.data_annFile,
