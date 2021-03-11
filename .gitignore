@@ -1,5 +1,6 @@
 data/*
 !data/*.sh
+!data/*.npy
 # Saved checkpoints/pretrained model
 checkpoints/**/*.pth
 
