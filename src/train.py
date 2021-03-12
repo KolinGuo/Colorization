@@ -13,10 +13,11 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from networks.dataset import load_dataset, get_dataset_prior_probs
+from networks.dataset import load_dataset, get_dataset_prior_probs, \
+                             ColorQuantization
 from networks.models import get_model
 from networks.losses import get_loss_func
-from networks.metrics import AUC
+from networks.metrics import get_metric
 
 def get_parser() -> argparse.ArgumentParser:
     """Get the argparse parser for this script"""
@@ -53,6 +54,11 @@ def get_parser() -> argparse.ArgumentParser:
         choices=['MSELoss', 'MSELoss_Vibrant'],
         default='MSELoss_Vibrant',
         help="Loss functions for training")
+    train_parser.add_argument(
+        '--eval-metric',
+        choices=['AUC', 'RebalancedAUC'],
+        default='RebalancedAUC',
+        help="Evaluation metric on the validation dataset")
     train_parser.add_argument(
         "--color-vivid-gamma", type=float, default=2.0,
         help="Color vividness loss weight gamma (Default: 2.0)")
@@ -124,9 +130,9 @@ def train(args) -> None:
 
     # Load datasets
     train_dataset = load_dataset(args.data_dir, args.data_annFile,
-                                 args.batch_size)
+                                 args.batch_size, shuffle=True)
     val_dataset = load_dataset(args.val_data_dir, args.val_data_annFile,
-                               args.batch_size)
+                               args.batch_size, shuffle=False)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)
@@ -142,8 +148,10 @@ def train(args) -> None:
                                  betas=(0.9,0.99),
                                  weight_decay=1e-3)
     # Evaluation metric
+    color_quant = ColorQuantization(k=1, sigma=5,
+                                    ab_gamut_filepath=args.ab_gamut_file)
     #auc_metric = AUC(step_size = 1.0, device=pytorch_device)  # CUDA: Out-of-memory
-    auc_metric = AUC(step_size = 1.0)
+    metric = get_metric(args.eval_metric, prior_probs, color_quant, step_size=1.0)
 
     # Create another checkpoint/log folder for model.name and timestamp
     args.ckpt_dir = os.path.join(args.ckpt_dir,
@@ -219,7 +227,7 @@ def train(args) -> None:
         # Evaluate on validation set
         epoch_val_loss = 0.0
         model = model.eval()  # Set the module in evaluation mode
-        auc_metric.reset()    # Reset eval metric
+        metric.reset()    # Reset eval metric
         with torch.no_grad():
             for batch_i, (img_l, img_ab) in enumerate(val_dataset):
                 # Passing data to GPU
@@ -233,7 +241,7 @@ def train(args) -> None:
                 loss = loss_func(img_ab_pred, img_ab)
                 epoch_val_loss += loss
                 # Update eval metric
-                auc_metric.update((img_ab_pred, img_ab))
+                metric.update((img_ab_pred, img_ab))
 
                 # Preliminary stop for debugging
                 if args.val_batch > 0 and batch_i+1 == args.val_batch:
@@ -243,8 +251,8 @@ def train(args) -> None:
         val_epoch_loss = epoch_val_loss / (batch_i+1)
         val_writer.add_scalar('epoch_loss', val_epoch_loss,
                               global_step=epoch_i+1)
-        val_epoch_auc = auc_metric.compute()
-        val_writer.add_scalar('epoch_auc', val_epoch_auc,
+        val_epoch_auc = metric.compute()
+        val_writer.add_scalar(f'epoch_{args.eval_metric}', val_epoch_auc,
                               global_step=epoch_i+1)
 
         # Print loss/eval metric
