@@ -165,3 +165,9 @@ RUN git clone https://github.com/cocodataset/cocoapi.git /usr/share/cocoapi && \
     cd /usr/share/cocoapi/PythonAPI && \
     sed -i 's/python/python3/g' Makefile && \
     make && make install
+
+# accimage
+#   high performance image loading and augmenting routines mimicking PIL.Image interface
+RUN pip3 install --prefix=/opt/intel/ipp ipp-devel \
+  && pip3 install git+https://github.com/pytorch/accimage
+ENV LD_LIBRARY_PATH=/opt/intel/ipp/lib:${LD_LIBRARY_PATH}
