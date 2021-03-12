@@ -6,6 +6,7 @@ import torch
 import torch.utils.data as data
 import torchvision.datasets as dset
 #import torchvision.transforms as transforms
+from sklearn.neighbors import NearestNeighbors
 from util import *
 
 def input_transforms(img_rgb_orig, target, HW=(256,256), resample=3):
@@ -93,3 +94,103 @@ def get_dataset_prior_probs(root: str, annFile: str, batch_size: int,
 
     return prior_probs
 
+class PriorFactor():
+    """Prior Factor w class"""
+    def __init__(self, prior_probs: np.ndarray, alpha=1.0, lam=0.0, verbose=False):
+        """
+        Inputs:
+            prior_probs: prior probability array.
+            alpha : prior factor inverse power.
+            lam : percentage to mix in uniform prior with empirical prior
+        """
+        self.prior_probs = prior_probs
+        self.alpha = alpha
+        self.lam = lam
+        self.verbose = verbose
+
+        # define uniform probability
+        self.uni_probs = np.zeros_like(self.prior_probs)
+        self.uni_probs[self.prior_probs != 0] = 1.
+        self.uni_probs = self.uni_probs/np.sum(self.uni_probs)
+
+        # convex combination of empirical prior and uniform distribution
+        self.prior_mix = (1-self.lam)*self.prior_probs + self.lam*self.uni_probs
+
+        # set prior factor
+        self.prior_factor = self.prior_mix**-self.alpha
+        self.prior_factor = self.prior_factor/np.sum(self.prior_probs*self.prior_factor) # re-normalize
+
+        if(self.verbose):
+            self.print_correction_stats()
+
+    def print_correction_stats(self):
+        print('Prior factor correction:')
+        print('  (alpha, lam) = (%.2f, %.2f)'%(self.alpha,self.lam))
+        print('  (min,max,mean,med,exp) = (%.2f, %.2f, %.2f, %.2f, %.2f)' \
+                % (np.min(self.prior_factor),
+                   np.max(self.prior_factor),
+                   np.mean(self.prior_factor),
+                   np.median(self.prior_factor),
+                   np.sum(self.prior_factor*self.prior_probs)))
+
+    def forward(self, data_ab_quant, axis=1):
+        """Retrieve prior_factor of the input quantized ab data
+        Inputs:
+            data_ab_quant : quantized ab data. Shape: [batch_size, Q, H, W]
+            axis : the axis where the ab channel is at. Default: 1
+        Output:
+            corr_factor : the prior correction factors. Shape: [batch_size, H, W]
+        """
+        if data_ab_quant.ndim == 4:
+            data_ab_maxind = np.argmax(data_ab_quant,axis=axis)  # [batch_size, H, W]
+        else:
+            data_ab_maxind = data_ab_quant
+        corr_factor = self.prior_factor[data_ab_maxind]  # [batch_size, H, W]
+        #return np.expand_dims(corr_factor, axis)  # [batch_size, 1, H, W]
+        return corr_factor  # [batch_size, H, W]
+
+class ColorQuantization():
+    """Color Quantization Class"""
+    def __init__(self, k: int, sigma: float, ab_gamut_filepath: str):
+        """
+        Inputs:
+            k : number of nearest neighbor to find.
+            sigma : standard deviation of Gaussian kernel.
+            ab_gamut_filepath : filepath of sRGB in-gamut file of ab space.
+        """
+        self.k = k
+        self.sigma = sigma
+        self.ab_grids = np.load(ab_gamut_filepath)  # [313, 2]
+        self.Q = self.ab_grids.shape[0]
+        self.knn_model = NearestNeighbors(n_neighbors=k,
+                                          algorithm='ball_tree',
+                                          n_jobs=-1).fit(self.ab_grids)
+
+    def encode(self, ab_true: np.ndarray, axis: int = 1) -> np.ndarray:
+        """Quantize the ab_true groundtruth values with soft-encoding
+        Input:
+            ab_true : groundtruth ab channel values. Shape: [batch_size, 2, H, W]
+            axis : axis where the ab channel is at.
+        """
+
+        raise NotImplementedError('encode not implemented yet')
+
+    def encode_1hot(self, ab_data: np.ndarray, axis: int = 1) -> np.ndarray:
+        """Quantize the ab_true groundtruth values with one-hot encoding
+        Inputs:
+            ab_data : ab channel values. Shape: [batch_size, 2, H, W]
+            axis : axis where the ab channel is at.
+        Output:
+            ab_data_minind : encoded closest points indices of ab_grid.
+        """
+        ab_data = np.moveaxis(ab_data, axis, -1)  # [batch_size, H, W, 2]
+        prev_shape = np.array(ab_data.shape[:-1]).tolist()  # [batch_size, H, W]
+        ab_data = ab_data.reshape(-1, ab_data.shape[-1])  # [batch_size * H*W, 2]
+
+        # Compute norm of difference
+        dists = np.linalg.norm(ab_data[:,None,:] - self.ab_grids, axis=-1)  # [batch_size * H*W, Q]
+        ab_data_minind = np.argmin(dists, axis=-1)  # [batch_size * H*W,]
+
+        # Reshape back to prev_shape
+        ab_data_minind = ab_data_minind.reshape(prev_shape)  # [batch_size, H, W]
+        return ab_data_minind
