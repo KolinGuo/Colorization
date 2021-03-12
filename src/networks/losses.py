@@ -16,7 +16,7 @@ def get_loss_func(loss_func: str, class_weight,
     if loss_func == 'MSELoss_Vibrant':
         return MSELoss_Vibrant(reduction='sum',
                                color_vivid_gamma=color_vivid_gamma)
-    raise ValueError('Unknown loss_func')
+    raise ValueError(f'Unknown loss_func "{loss_func}"')
 
 class MSELoss(nn.MSELoss):
     """Custom MSELoss with 1/2 factor"""
