@@ -8,6 +8,7 @@ import argparse
 from typing import List
 import argcomplete
 
+from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -194,7 +195,7 @@ def train(args) -> None:
         # Train on training dataset
         epoch_loss = 0.0
         model = model.train()  # Set the module in training mode
-        for batch_i, (img_l, img_ab) in enumerate(train_dataset):
+        for batch_i, (img_l, img_ab) in enumerate(tqdm(train_dataset)):
             # Passing data to GPU
             img_l  = img_l.to(pytorch_device)
             img_ab = img_ab.to(pytorch_device)
@@ -229,7 +230,7 @@ def train(args) -> None:
         model = model.eval()  # Set the module in evaluation mode
         metric.reset()    # Reset eval metric
         with torch.no_grad():
-            for batch_i, (img_l, img_ab) in enumerate(val_dataset):
+            for batch_i, (img_l, img_ab) in enumerate(tqdm(val_dataset)):
                 # Passing data to GPU
                 img_l  = img_l.to(pytorch_device)
                 img_ab = img_ab.to(pytorch_device)
