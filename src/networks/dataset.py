@@ -23,11 +23,11 @@ def input_transforms(img_rgb_orig, target, HW=(256,256), resample=3):
 
     return (tens_rs_l, tens_rs_ab)
 
-def load_dataset(root: str, annFile: str, batch_size: int):
+def load_dataset(root: str, annFile: str, batch_size: int, shuffle: bool = True):
     dataset = dset.CocoDetection(root=root,
                                  annFile=annFile,
                                  transforms=input_transforms)
-    dataloader = data.DataLoader(dataset, batch_size=batch_size)
+    dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return dataloader
 
 def kNN(ref, query, k: int = 10):
@@ -151,7 +151,7 @@ class PriorFactor():
 
 class ColorQuantization():
     """Color Quantization Class"""
-    def __init__(self, k: int, sigma: float, ab_gamut_filepath: str):
+    def __init__(self, k: int = 10, sigma: float = 5, ab_gamut_filepath: str = ''):
         """
         Inputs:
             k : number of nearest neighbor to find.
