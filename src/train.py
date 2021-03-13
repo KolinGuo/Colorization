@@ -9,6 +9,7 @@ from typing import List
 import argcomplete
 
 from tqdm import tqdm
+from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -19,6 +20,7 @@ from networks.dataset import load_trainval_dataset, load_predict_dataset, \
 from networks.models import get_model
 from networks.losses import get_loss_func
 from networks.metrics import get_metric
+from util import postprocess_tens
 
 def get_parser() -> argparse.ArgumentParser:
     """Get the argparse parser for this script"""
@@ -61,11 +63,18 @@ def get_parser() -> argparse.ArgumentParser:
         default='RebalancedAUC',
         help="Evaluation metric on the validation dataset")
     train_parser.add_argument(
+        '-vi', '--val-img-idx', type=int, action='append',
+        default=[1, 2, 3, 14, 30, 80],  # To append: -vi 10 -vi 20
+        help="Image indices from validation dataset to visualize for each epoch")
+    train_parser.add_argument(
         "--color-vivid-gamma", type=float, default=2.0,
         help="Color vividness loss weight gamma (Default: 2.0)")
     train_parser.add_argument(
         "--batch-size", type=int, default=64,
         help="Batch size of patches (Default: 64)")
+    train_parser.add_argument(
+        "--val-batch-size", type=int, default=128,
+        help="Batch size of patches in validation (Default: 128)")
     train_parser.add_argument(
         "--num-epochs", type=int, default=20,
         help="Number of training epochs (Default: 20)")
@@ -132,7 +141,11 @@ def train(args) -> None:
             args.batch_size, shuffle=True)
     val_dataset = load_trainval_dataset(
             args.val_data_dir, args.val_data_annFile,
-            args.batch_size, shuffle=False)
+            args.val_batch_size, shuffle=False)
+    args.val_img_idx = sorted(args.val_img_idx)
+    val_pred_dataset = load_predict_dataset(
+            args.val_data_dir, None, subset_idx=args.val_img_idx,
+            batch_size=1, shuffle=False)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)
@@ -259,6 +272,26 @@ def train(args) -> None:
         print(f'Epoch {epoch_i+1}/{args.num_epochs}: train_loss={train_epoch_loss}'
               f'\tval_loss={val_epoch_loss}\tval_auc={val_epoch_auc:.4f}')
 
+        # Generate colorized validation images and visualize in Tensorboard
+        model = model.eval()  # Set the module in evaluation mode
+        with torch.no_grad():
+            for batch_i, (img_path, tens_orig_l, tens_rs_l) in enumerate(tqdm(val_pred_dataset)):
+                img_name = os.path.basename(img_path[0]).split('.')[0]  # '000000002532'
+                # Passing data to GPU
+                tens_rs_l = tens_rs_l.to(pytorch_device)
+                # Forward pass through model
+                tens_rs_ab_pred = model(tens_rs_l).cpu()
+                # Post processing and Write to Tensorboard
+                if epoch_i == 0:
+                    img_gray = postprocess_tens(tens_orig_l, torch.cat((0*tens_orig_l,0*tens_orig_l),dim=1))
+                    img_orig = np.asarray(Image.open(img_path[0]).convert('RGB'))
+                    val_writer.add_images(img_name+'_gray_true.png',
+                                          np.stack((img_gray, img_orig), axis=0).astype('uint8'),
+                                          global_step=0, dataformats='NHWC')
+                img_pred = postprocess_tens(tens_orig_l, tens_rs_ab_pred)
+                val_writer.add_image(img_name+'_pred.png', img_pred,
+                                     global_step=epoch_i+1, dataformats='HWC')
+
         # Save Checkpoint
         ckpt_path = os.path.join(args.ckpt_dir, 
                                  f'cp-{epoch_i+1:03d}-{val_epoch_auc:.4f}.ckpt.pth')
@@ -282,5 +315,12 @@ if __name__ == '__main__':
     parser = get_parser()
     argcomplete.autocomplete(parser)
     train_args = parser.parse_args()
+
+    # Ignore skimage.color.colorconv.lab2xyz() out-of-range warnings
+    import warnings
+    warnings.filterwarnings("ignore", message='Color data out of range.+',
+                            category=UserWarning,
+                            module='skimage.color.colorconv',
+                            lineno=1128, append=False)
 
     train(train_args)

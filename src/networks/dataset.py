@@ -1,6 +1,6 @@
 import os
 import glob
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, List
 
 from tqdm import tqdm
 import numpy as np
@@ -95,10 +95,15 @@ def load_trainval_dataset(root: str, annFile: str,
           f'{len(dataloader)} batches')
     return dataloader
 
-def load_predict_dataset(root: str, annFile: str,
+def load_predict_dataset(root: str, annFile: str, subset_idx : List[int] = None,
                          batch_size: int = 1, shuffle: bool = False):
     dataset = CocoColorization(root, predict_acc_img_transform)
     #dataset = CocoColorization(root, predict_PIL_img_transform)
+
+    # Create a subset of the dataset
+    if subset_idx:
+        dataset = data.Subset(dataset, subset_idx)
+
     dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     print(f'Predict Dataset "{os.path.basename(root)}" loaded: {len(dataset)} samples,',
           f'{len(dataloader)} batches')

@@ -12,8 +12,7 @@ import numpy as np
 from PIL import Image
 import torch
 
-from networks.dataset import load_predict_dataset, get_dataset_prior_probs, \
-                             ColorQuantization
+from networks.dataset import load_predict_dataset
 from networks.models import get_model
 from util import postprocess_tens
 
@@ -73,7 +72,7 @@ def predict(args):
     # Load dataset
     dataset = load_predict_dataset(
             args.data_dir, None,
-            args.batch_size, shuffle=False)
+            batch_size=args.batch_size, shuffle=False)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)
@@ -93,7 +92,7 @@ def predict(args):
     model = model.eval()  # Set the module in evaluation mode
     with torch.no_grad():
         for batch_i, (img_path, tens_orig_l, tens_rs_l) in enumerate(tqdm(dataset)):
-            img_name = os.path.basename(img_path[0]).split('.')[0]
+            img_name = os.path.basename(img_path[0]).split('.')[0]  # '000000002532'
             # Passing data to GPU
             tens_rs_l = tens_rs_l.to(pytorch_device)
 
