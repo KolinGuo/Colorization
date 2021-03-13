@@ -168,6 +168,13 @@ RUN git clone https://github.com/cocodataset/cocoapi.git /usr/share/cocoapi && \
 
 # accimage
 #   high performance image loading and augmenting routines mimicking PIL.Image interface
-RUN pip3 install --prefix=/opt/intel/ipp ipp-devel \
-  && pip3 install git+https://github.com/pytorch/accimage
-ENV LD_LIBRARY_PATH=/opt/intel/ipp/lib:${LD_LIBRARY_PATH}
+#RUN pip3 install --prefix=/opt/intel/ipp ipp-devel && \
+#    git clone https://github.com/pytorch/accimage.git /usr/share/accimage && \
+#    cd /usr/share/accimage && \
+#    sed -i 's/ippiResizeAntialiasingLinearInit/ippiResizeAntialiasingCubicInit/g' ./imageops.c && \
+#    sed -i 's/e, specification,/e, 1.0\/3.0, 1.0\/3.0, specification,/g' ./imageops.c && \
+#    sed -i 's/free(self->buffer);/free(self->buffer);\n    free(specification);\n    free(initialization_buffer);\n    free(scratch_buffer);/g' ./imageops.c && \
+#    pip3 install /usr/share/accimage
+#    pip3 install git+https://github.com/pytorch/accimage
+#
+#ENV LD_LIBRARY_PATH=/opt/intel/ipp/lib:${LD_LIBRARY_PATH}
