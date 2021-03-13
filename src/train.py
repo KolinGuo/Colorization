@@ -14,8 +14,8 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-from networks.dataset import load_dataset, get_dataset_prior_probs, \
-                             ColorQuantization
+from networks.dataset import load_trainval_dataset, load_predict_dataset, \
+                             get_dataset_prior_probs, ColorQuantization
 from networks.models import get_model
 from networks.losses import get_loss_func
 from networks.metrics import get_metric
@@ -81,7 +81,7 @@ def get_parser() -> argparse.ArgumentParser:
     train_parser.add_argument(
         "--ckpt-filepath", type=str, default=None,
         help="Checkpoint filepath to load and resume training from "
-        "e.g. ./cp-001-50.51.ckpt.pth")
+             "e.g. ./cp-001-50.51.ckpt.pth")
     train_parser.add_argument(
         "--log-dir", type=str, default='/Colorization/tb_logs',
         help="Directory for saving tensorboard logs")
@@ -119,9 +119,6 @@ def train(args) -> None:
     # Set pytorch_device
     pytorch_device = torch.device(args.device)
 
-    # Set tf.keras mixed precision to float16
-    #set_keras_mixed_precision_policy('mixed_float16')
-
     # Compute prior probability
     prior_probs = get_dataset_prior_probs(args.data_dir, args.data_annFile,
                                           args.batch_size // 4,
@@ -130,10 +127,12 @@ def train(args) -> None:
     torch.cuda.empty_cache()
 
     # Load datasets
-    train_dataset = load_dataset(args.data_dir, args.data_annFile,
-                                 args.batch_size, shuffle=True)
-    val_dataset = load_dataset(args.val_data_dir, args.val_data_annFile,
-                               args.batch_size, shuffle=False)
+    train_dataset = load_trainval_dataset(
+            args.data_dir, args.data_annFile,
+            args.batch_size, shuffle=True)
+    val_dataset = load_trainval_dataset(
+            args.val_data_dir, args.val_data_annFile,
+            args.batch_size, shuffle=False)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)

@@ -1,17 +1,22 @@
 import os
+import glob
+from typing import Any, Callable, Optional, Tuple
 
 from tqdm import tqdm
 import numpy as np
 import torch
 import torch.utils.data as data
+import torchvision
+torchvision.set_image_backend('accimage')
 import torchvision.datasets as dset
-#import torchvision.transforms as transforms
+import accimage
+import torchvision.transforms as transforms
 from sklearn.neighbors import NearestNeighbors
 from util import *
 
-def input_transforms(img_rgb_orig, target, HW=(256,256), resample=3):
+def trainval_PIL_img_transform(img_rgb_orig, HW=(256,256), resample=3):
     # return resized L and ab channels as torch Tensors
-    img_rgb_rs = resize_img(img_rgb_orig, HW=HW, resample=resample)
+    img_rgb_rs = resize_PIL_img(img_rgb_orig, HW=HW, resample=resample)
     
     img_lab_rs = color.rgb2lab(img_rgb_rs)
 
@@ -23,11 +28,79 @@ def input_transforms(img_rgb_orig, target, HW=(256,256), resample=3):
 
     return (tens_rs_l, tens_rs_ab)
 
-def load_dataset(root: str, annFile: str, batch_size: int, shuffle: bool = True):
-    dataset = dset.CocoDetection(root=root,
-                                 annFile=annFile,
-                                 transforms=input_transforms)
+def predict_PIL_img_transform(img_rgb_orig, HW=(256,256), resample=3):
+    # return original size L and resized L as torch Tensors
+    return preprocess_PIL_img(img_rgb_orig, HW=HW, resample=resample)
+
+def trainval_acc_img_transform(img_path: str,
+                               img_rgb_orig: np.ndarray,
+                               img_rgb_rs: np.ndarray) -> Tuple[torch.Tensor]:
+    # return resized L and ab channels as torch Tensors
+    img_lab_rs = color.rgb2lab(img_rgb_rs)
+
+    img_l_rs = img_lab_rs[:,:,0]
+    img_ab_rs = np.moveaxis(img_lab_rs[:,:,1:], -1, 0)  # (2, 256, 256)
+
+    tens_rs_l = torch.Tensor(img_l_rs)[None,:,:]
+    tens_rs_ab = torch.Tensor(img_ab_rs)[:,:]
+
+    return (tens_rs_l, tens_rs_ab)
+
+def predict_acc_img_transform(img_path: str,
+                              img_rgb_orig: np.ndarray,
+                              img_rgb_rs: np.ndarray) -> Tuple[torch.Tensor]:
+    # return original size L and resized L as torch Tensors
+    img_lab_orig = color.rgb2lab(img_rgb_orig)
+    img_lab_rs = color.rgb2lab(img_rgb_rs)
+
+    img_l_orig = img_lab_orig[:,:,0]
+    img_l_rs = img_lab_rs[:,:,0]
+
+    tens_orig_l = torch.Tensor(img_l_orig)[None,:,:]
+    tens_rs_l = torch.Tensor(img_l_rs)[None,:,:]
+
+    return (img_path, tens_orig_l, tens_rs_l)
+
+class CocoColorization(dset.VisionDataset):
+    """Coco Detection Dataset used for Colorization, use accimage instead of PIL"""
+    def __init__(self,
+                 root: str,
+                 transform: Optional[Callable] = None) -> None:
+        self.root = os.path.abspath(root)
+        super(CocoColorization, self).__init__(self.root, None, transform, None)
+        self.img_paths = sorted(glob.glob(os.path.join(self.root, "*.jpg")))
+        self.resize_trans = transforms.Resize((256,256), interpolation=3)
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        img_path = self.img_paths[index]
+
+        img = accimage.Image(img_path)   # accimage.Image
+        img_arr = acc_image_to_np(img)
+        img_rs_arr = acc_image_to_np(self.resize_trans.forward(img))
+        return self.transform(img_path, img_arr, img_rs_arr)
+
+        #img = Image.open(img_path).convert('RGB')     # PIL.Image
+        #return self.transform(img)
+
+    def __len__(self) -> int:
+        return len(self.img_paths)
+
+def load_trainval_dataset(root: str, annFile: str,
+                          batch_size: int, shuffle: bool = True):
+    dataset = CocoColorization(root, trainval_acc_img_transform)
+    #dataset = CocoColorization(root, trainval_PIL_img_transform)
     dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    print(f'Train/Val Dataset "{os.path.basename(root)}" loaded: {len(dataset)} samples,',
+          f'{len(dataloader)} batches')
+    return dataloader
+
+def load_predict_dataset(root: str, annFile: str,
+                         batch_size: int = 1, shuffle: bool = False):
+    dataset = CocoColorization(root, predict_acc_img_transform)
+    #dataset = CocoColorization(root, predict_PIL_img_transform)
+    dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    print(f'Predict Dataset "{os.path.basename(root)}" loaded: {len(dataset)} samples,',
+          f'{len(dataloader)} batches')
     return dataloader
 
 def kNN(ref, query, k: int = 10):
