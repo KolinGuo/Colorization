@@ -69,7 +69,8 @@ class CocoColorization(dset.VisionDataset):
         self.root = os.path.abspath(root)
         super(CocoColorization, self).__init__(self.root, None, transform, None)
         self.img_paths = sorted(glob.glob(os.path.join(self.root, "*.jpg")))
-        self.resize_trans = transforms.Resize((256,256), interpolation=3)
+        self.resize_trans = transforms.Resize(
+                (256,256), interpolation=transforms.InterpolationMode.BICUBIC)
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         img_path = self.img_paths[index]
