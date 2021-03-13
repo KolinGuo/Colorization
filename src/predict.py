@@ -29,7 +29,7 @@ def get_parser() -> argparse.ArgumentParser:
         choices=['eccv16', 'eccv16_pretrained'],
         help="Network model used for predicting")
     ckpt_parser.add_argument(
-        "ckpt_filepath", type=str,
+        "--ckpt-filepath", type=str, default=None,
         help="Checkpoint filepath to load and predict from "
              "e.g. ./cp-001-50.51.ckpt.pth")
 
@@ -77,9 +77,10 @@ def predict(args):
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)
-    ckpt = torch.load(args.ckpt_filepath)
-    model.load_state_dict(ckpt['model_state_dict'])
-    print('Model weights loaded')
+    if args.ckpt_filepath is not None:
+        ckpt = torch.load(args.ckpt_filepath)
+        model.load_state_dict(ckpt['model_state_dict'])
+        print('Model weights loaded')
 
     # Create output directory
     args.save_dir = os.path.join(os.path.abspath(args.save_dir), model.name)
@@ -113,5 +114,12 @@ if __name__ == '__main__':
     parser = get_parser()
     argcomplete.autocomplete(parser)
     predict_args = parser.parse_args()
+
+    # Ignore skimage.color.colorconv.lab2xyz() out-of-range warnings
+    import warnings
+    warnings.filterwarnings("ignore", message='Color data out of range.+',
+                            category=UserWarning,
+                            module='skimage.color.colorconv',
+                            lineno=1128, append=False)
 
     predict(predict_args)
