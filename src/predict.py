@@ -45,6 +45,13 @@ def get_parser() -> argparse.ArgumentParser:
         "--batch-size", type=int, default=1,
         help="Batch size of patches")
     predict_parser.add_argument(
+        '-i', '--img-idx', type=int, action='append',
+        default=[1, 2, 3, 14, 30, 80],  # To append: -vi 10 -vi 20
+        help="Image indices from the dataset to predict")
+    predict_parser.add_argument(
+        "--all-img", action='store_true',
+        help="Whether to predict all images in dataset (Default: False)")
+    predict_parser.add_argument(
         "--save-dir", type=str, default="/Colorization/data/outputs",
         help="Output directory (Default: /Colorization/data/outputs/model_name_cp-001-0.4584)")
     predict_parser.add_argument(
@@ -70,8 +77,12 @@ def predict(args):
     pytorch_device = torch.device(args.device)
 
     # Load dataset
+    if args.all_img:
+        args.img_idx = None
+    else:
+        args.img_idx = sorted(args.img_idx)
     dataset = load_predict_dataset(
-            args.data_dir, None,
+            args.data_dir, None, subset_idx=args.img_idx,
             batch_size=args.batch_size, shuffle=False)
 
     # Create network model
