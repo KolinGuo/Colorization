@@ -47,7 +47,7 @@ def get_parser() -> argparse.ArgumentParser:
         help="Batch size of patches")
     predict_parser.add_argument(
         "--save-dir", type=str, default="/Colorization/data/outputs",
-        help="Output directory (Default: /Colorization/data/outputs/model_name)")
+        help="Output directory (Default: /Colorization/data/outputs/model_name_cp-001-0.4584)")
     predict_parser.add_argument(
         "--device", choices=['cuda:0', 'cpu'], default='cuda:0',
         help="Predicting device (Default: cuda:0)")
@@ -80,7 +80,8 @@ def predict(args):
     if args.ckpt_filepath is not None:
         ckpt = torch.load(args.ckpt_filepath)
         model.load_state_dict(ckpt['model_state_dict'])
-        print('Model weights loaded')
+        model.name += '_' + os.path.basename(args.ckpt_filepath).split('.ckpt.pth')[0]
+        print(f'Model "{model.name}" weights loaded')
 
     # Create output directory
     args.save_dir = os.path.join(os.path.abspath(args.save_dir), model.name)
