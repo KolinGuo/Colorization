@@ -31,7 +31,7 @@ def get_parser() -> argparse.ArgumentParser:
     model_parser = main_parser.add_argument_group('Model configurations')
     model_parser.add_argument(
         'model',
-        choices=['eccv16', 'eccv16_pretrained'],
+        choices=['eccv16', 'eccv16_pretrained', 'eccv16_half'],
         help="Network model used for training")
 
     dataset_parser = main_parser.add_argument_group('Dataset configurations')
@@ -135,17 +135,23 @@ def train(args) -> None:
     # Empty GPU cache if possible
     torch.cuda.empty_cache()
 
+    # Resizing factor
+    if args.model == 'eccv16' or args.model == 'eccv16_pretrained':
+        args.hw_resize = 256
+    if args.model == 'eccv16_half':
+        args.hw_resize = 128
+
     # Load datasets
     train_dataset = load_trainval_dataset(
             args.data_dir, args.data_annFile,
-            args.batch_size, shuffle=True)
+            args.batch_size, hw_resize=args.hw_resize, shuffle=True)
     val_dataset = load_trainval_dataset(
             args.val_data_dir, args.val_data_annFile,
-            args.val_batch_size, shuffle=False)
+            args.val_batch_size, hw_resize=args.hw_resize, shuffle=False)
     args.val_img_idx = sorted(args.val_img_idx)
     val_pred_dataset = load_predict_dataset(
             args.val_data_dir, None, subset_idx=args.val_img_idx,
-            batch_size=1, shuffle=False)
+            batch_size=1, hw_resize=args.hw_resize, shuffle=False)
 
     # Create network model
     model = get_model(args.model).to(pytorch_device)

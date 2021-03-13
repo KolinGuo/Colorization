@@ -65,12 +65,15 @@ class CocoColorization(dset.VisionDataset):
     """Coco Detection Dataset used for Colorization, use accimage instead of PIL"""
     def __init__(self,
                  root: str,
+                 hw_resize: int = 256,
                  transform: Optional[Callable] = None) -> None:
         self.root = os.path.abspath(root)
         super(CocoColorization, self).__init__(self.root, None, transform, None)
         self.img_paths = sorted(glob.glob(os.path.join(self.root, "*.jpg")))
+        self.hw_resize = hw_resize
         self.resize_trans = transforms.Resize(
-                (256,256), interpolation=transforms.InterpolationMode.BICUBIC)
+                (self.hw_resize,self.hw_resize),
+                interpolation=transforms.InterpolationMode.BICUBIC)
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         img_path = self.img_paths[index]
@@ -87,17 +90,21 @@ class CocoColorization(dset.VisionDataset):
         return len(self.img_paths)
 
 def load_trainval_dataset(root: str, annFile: str,
-                          batch_size: int, shuffle: bool = True):
-    dataset = CocoColorization(root, trainval_acc_img_transform)
+                          batch_size: int,
+                          hw_resize: int = 256, shuffle: bool = True):
+    dataset = CocoColorization(root, hw_resize=hw_resize,
+                               transform=trainval_acc_img_transform)
     #dataset = CocoColorization(root, trainval_PIL_img_transform)
     dataloader = data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     print(f'Train/Val Dataset "{os.path.basename(root)}" loaded: {len(dataset)} samples,',
           f'{len(dataloader)} batches')
     return dataloader
 
-def load_predict_dataset(root: str, annFile: str, subset_idx : List[int] = None,
-                         batch_size: int = 1, shuffle: bool = False):
-    dataset = CocoColorization(root, predict_acc_img_transform)
+def load_predict_dataset(root: str, annFile: str,
+                         subset_idx : List[int] = None, batch_size: int = 1,
+                         hw_resize: int = 256, shuffle: bool = False):
+    dataset = CocoColorization(root, hw_resize=hw_resize,
+                               transform=predict_acc_img_transform)
     #dataset = CocoColorization(root, predict_PIL_img_transform)
 
     # Create a subset of the dataset
