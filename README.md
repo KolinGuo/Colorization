@@ -38,7 +38,7 @@ You should be greeted by the Docker container **colorization** when this script 
   Some other available arguments can be viewed with `--help` option. 
 
 ## Presentation and Report
-Our [project outline](Project_Outline.pdf) and [final report](docs/Project_Report.pdf) can be found in [docs/](docs) folder.  
+Our [project outline](docs/Project_Outline.pdf) and [final report](docs/Project_Report.pdf) can be found in [docs/](docs) folder.  
 
 ## Additional Work
   * Change the network to output chroma/hue channels instead of ab channels and use a similar loss function to constrain on chroma/hue directly. 
